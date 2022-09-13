@@ -1,6 +1,5 @@
 (ns pilot.graphql.exec
   (:require [clj-http.client :as http]
-            [clj-time.jdbc]
             [clojure.data.json :as json]
             [clojure.string :refer [starts-with?]])
   (:import clojure.lang.ExceptionInfo))

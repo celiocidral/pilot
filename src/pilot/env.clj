@@ -1,6 +1,5 @@
 (ns pilot.env
-  (:require [clj-time.jdbc]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [integrant.core :as ig]))
 
 (def ^:private home-dir (io/file (System/getenv "HOME") ".pilot"))

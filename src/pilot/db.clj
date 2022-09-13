@@ -1,6 +1,5 @@
 (ns pilot.db
   (:require [camel-snake-kebab.core :as csk]
-            [clj-time.jdbc]
             [integrant.core :as ig]
             [next.jdbc :as jdbc]
             [next.jdbc.result-set :as jdbc.result-set]
