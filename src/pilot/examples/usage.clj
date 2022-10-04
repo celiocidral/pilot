@@ -1,22 +1,42 @@
 (ns pilot.examples.usage
-  (:require [pilot.env :as env]
-            [pilot.env.graphql :as g]
+  (:require [pilot.env]
+            [pilot.core :as p]
             [pilot.graphql.reveal :as r]))
 
+;; load the dev environment and store it in a var
+(def env (pilot.env/env :dev))
+
+;; a couple of graphql queries
 (comment
-  ;; initialize the environment
-  (env/switch! :local))
+  (p/gql-query env
+               {:auth :rpa.aa1
+                :query "query { viewer { user3 { email } } }"})
+
+  (p/gql-query env
+               {:auth :rpa.aa1
+                :query "query Cases ($input: CasesQueryInput!) {
+                          cases (input: $input) {
+                            __typename
+                            ... on Case {
+                              description
+                            }
+                          }
+                        }"
+                :variables {:input {:where [{:airportIcao {:_eq "KFLL"}}]
+                                    :limit 10}}}))
 
 (comment
-  ;; execute some query
-  (g/exec-as (g/credentials :aa1)
-             "query { viewer { user3 { email } } }"))
+  ;; get a db connection. the connection is cached on the first call and remains
+  ;; open until you call close-db!
+  (p/db env)
+
+  (p/close-db! env))
 
 (comment
   ;; how to use the graphql reveal extension
 
   ;; fetch & store the graphql schema
-  (def -schema (g/introspect-as :admin))
+  (def -schema (p/introspect env))
 
   ;; show the schema browser
   (r/show-schema -schema)

@@ -28,71 +28,103 @@ There's also support for connecting to databases, which is something I didn't wa
 
 # Configuring Environments
 
-Create an EDN file at `~/.pilot/pilot.edn` and write some config like the example below. I hope it's self-explanatory.
+Create an EDN file at `~/.pilot/pilot.edn` and add enviroment configuration like the example below. Each top-level key contains configuration specific to an environment.
 
 ```clojure
 {:local {:graphql-url "http://localhost:3000/graphql"
 
-         :system
-         {[:pilot.auth.firebase/provider :auth/provider]
-          {:firebase-key "xxxxxxxx"}
+         :firebase-key "xxxxxxxx"
 
-          [:pilot.db/connection :db/connection]
-          {:username           "postgres"
-           :password           "xxxxxxxx"
-           :database-name      "xxxxxxxx"
-           :server-name        "localhost"
-           :port-number        8354
-           :auto-commit        true
-           :read-only          false
-           :connection-timeout 30000
-           :validation-timeout 5000
-           :idle-timeout       600000
-           :max-lifetime       1800000
-           :minimum-idle       10
-           :maximum-pool-size  10
-           :pool-name          "db-pool"
-           :adapter            "postgresql"
-           :register-mbeans    false}}
-
-         :credentials
+         ;; a map of aliases -> firebase account credentials
+         ;; in this example we specify two accounts, an admin and an moc
+         :firebase-accounts
          {:admin {:username "youremail+admin@example.com"
                   :password "xxxxxxxx"}
           :moc {:username "youremail+moc@example.com"
-                :password "xxxxxxxx"}}}
+                :password "xxxxxxxx"}}
+
+         :db {:username           "postgres"
+              :password           "password"
+              :database-name      "beacon_dev"
+              :server-name        "localhost"
+              :port-number        8354
+              :auto-commit        true
+              :read-only          false
+              :connection-timeout 30000
+              :validation-timeout 5000
+              :idle-timeout       600000
+              :max-lifetime       1800000
+              :minimum-idle       10
+              :maximum-pool-size  10
+              :pool-name          "db-pool"
+              :adapter            "postgresql"
+              :register-mbeans    false}}
+ 
  :development { ... }
  :staging { ... }
  :production { ... }}
 ```
 
-Stuff under `:system` is managed by Integrant.
+# Environments
 
-# Switching Between Environments
-
-When switching to a different environment, use the environment key as defined in the configuration. Before switching, it shuts down the currently loaded environment, i.e. closes db connection, and then loads the new environment.
+Everything Pilot needs is contained in an environment map. In the example below I'm loading the local environment and storing it in a var so I can pass it later to other functions.
 
 ```clojure
+(require '[pilot.env])
+
+(def env (pilot.env/env :local))
+```
+
+# Getting a DB Connection
+
+```clojure
+(require '[pilot.core :as p])
 (require '[pilot.env :as env])
 
-(env/switch! :local)
+(def env (pilot.env/env :local))
+
+(comment
+  ;; get a db connection. the connection is cached on the first call and remains
+  ;; open until you call close-db! so you can call p/db any number of times on
+  ;; the same env.
+  (p/db env)
+
+  (p/close-db! env))
 ```
 
 # Executing GraphQL Queries and Mutations
 
-Once you switch to some environment, you can start making GraphQL requests.
-
 ```clojure
-(require '[pilot.env.graphql :as g])
+(require '[pilot.env])
+(require '[pilot.core :as p])
 
-(g/exec-as (g/credentials :moc)
-           "query { viewer { user3 { email } } }")
+(def env (pilot.env/env :local))
+
+(comment
+  (p/gql-query env
+               ;; the :auth key specifies the firebase account
+               {:auth :moc
+                :query "query { viewer { user3 { email } } }"})
+
+  (p/gql-query env
+               {:auth :moc
+                :query "query Cases ($input: CasesQueryInput!) {
+                          cases (input: $input) {
+                            __typename
+                            ... on Case {
+                              description
+                            }
+                          }
+                        }"
+                :variables {:input {:where [{:airportIcao {:_eq "KFLL"}}]
+                                    :limit 10}}}))
 ```
 
-`exec-as` requires Firebase credentials. You can use the `credentials` fn to lookup some credentials by their alias as defined in the configuration. `exec-as` will generate the Firebase token and add it to the HTTP request as authorization header.
+# Outdated Stuff
 
-There's also an `exec` fn that doesn't take credentials.
+The sections below are probably outdated.
 
-# Inspecting The GraphQL Schema
+## Inspecting The GraphQL Schema
 
 ```clojure
 (require '[pilot.env.graphql :as g])
@@ -135,7 +167,7 @@ That helps with navigation, but still the output makes your eyes bleed. It looks
     (s/simplify schema))
 ```
 
-# Reveal Extension
+## Reveal Extension
 
 If you use [Reveal](https://vlaaad.github.io/reveal/) there's a fn that renders the GraphQL schema on Reveal's result panel. It allows you to browse the schema, search for queries, mutations, types, etc.
 
@@ -148,15 +180,7 @@ If you use [Reveal](https://vlaaad.github.io/reveal/) there's a fn that renders 
 (r/show-schema schema)
 ```
 
-# Getting The DB Connection
-
-```clojure
-(require '[pilot.env :as env])
-
-(env/system-component :db/connection)
-```
-
-# Next Steps
+## Next Steps
 
 * Generate GraphQL query text.
 * Write some kind of linter maybe? Could check for naming & structure conventions.

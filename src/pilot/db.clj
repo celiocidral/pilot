@@ -1,11 +1,14 @@
 (ns pilot.db
   (:require [camel-snake-kebab.core :as csk]
-            [integrant.core :as ig]
+            [clojure.core.cache.wrapped :as caching]
             [next.jdbc :as jdbc]
             [next.jdbc.result-set :as jdbc.result-set]
             [hikari-cp.core :as hikari :refer [make-datasource]]))
 
-(defn connect-db [cfg]
+(defonce ^:private cache (caching/basic-cache-factory {}))
+
+(defn- connect!* [cfg]
+  (tap> [::connect! (:username cfg) (:server-name cfg)])
   (let [opts (-> jdbc/unqualified-snake-kebab-opts
                  (assoc :column-fn (fn [v]
                                      (csk/->snake_case v :separator \-)))
@@ -17,12 +20,22 @@
       (make-datasource cfg)
       opts)))
 
-(defn close-db [db]
+(defn- close-connection! [db]
   (some-> db jdbc/get-datasource .close))
 
-(defmethod ig/init-key ::connection [_ cfg]
-  {:pre [(map? cfg)]}
-  (connect-db cfg))
+(defn- cache-key [cfg]
+  (select-keys cfg [:username
+                    :database-name
+                    :server-name]))
 
-(defmethod ig/halt-key! ::connection [_ db]
-  (close-db db))
+(defn connect! [cfg]
+  (let [k (cache-key cfg)]
+    (-> cache
+        (caching/through-cache k (fn [_] (connect!* cfg)))
+        (get k))))
+
+(defn disconnect! [cfg]
+  (when-let [conn (caching/lookup cache (cache-key cfg))]
+    (close-connection! conn)
+    (caching/evict cache (cache-key cfg))
+    nil))

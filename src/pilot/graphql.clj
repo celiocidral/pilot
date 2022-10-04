@@ -1,4 +1,4 @@
-(ns pilot.graphql.exec
+(ns pilot.graphql
   (:require [clj-http.client :as http]
             [clojure.data.json :as json]
             [clojure.string :refer [starts-with?]])
@@ -20,7 +20,8 @@
           (throw (Exception. e))))))
 
 (defn- error? [response]
-  (not= 200 (:status response)))
+  (or (not= 200 (:status response))
+      (seq (:errors response))))
 
 (defn exec
   [graphql-url http-headers query variables]
